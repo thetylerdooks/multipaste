@@ -82,6 +82,22 @@ If you skip this, Multipaste still works: it puts the item on the clipboard and 
   defaults delete com.tylerdooks.multipaste
   ```
 
+## Uninstall
+
+Open **Settings** from the menu-bar icon, scroll to the bottom and click **Uninstall Multipaste…**. After you confirm, Multipaste deletes your clipboard history and its settings, turns off Launch at Login, moves itself to the Trash and quits. If it cannot move itself (for example when it is not in a folder you can write to), it still deletes the data and asks you to drag the app to the Trash yourself.
+
+To uninstall by hand instead:
+
+1. Turn off **Launch at Login** in the menu-bar menu, then quit Multipaste.
+2. Drag Multipaste from Applications to the Trash.
+3. Remove its data and settings:
+   ```sh
+   rm -rf ~/Library/Application\ Support/Multipaste
+   defaults delete com.tylerdooks.multipaste
+   ```
+
+Either way, macOS keeps the Accessibility entry. Remove it under **System Settings > Privacy & Security > Accessibility**, or run `tccutil reset Accessibility com.tylerdooks.multipaste`.
+
 ## Build from source
 
 You need a Mac with Xcode (or the Xcode Command Line Tools for a single-architecture build).

@@ -20,6 +20,8 @@ final class HistoryStore: ObservableObject {
     private let fileManager = FileManager.default
     private let ioQueue = DispatchQueue(label: "com.tylerdooks.multipaste.storage", qos: .utility)
     private let thumbnailCache = NSCache<NSString, NSImage>()
+    /// Set by uninstall: from then on nothing is written to disk any more.
+    private var isDestroyed = false
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -41,6 +43,7 @@ final class HistoryStore: ObservableObject {
     /// Adds a new item on top. If identical content already exists it is moved
     /// to the top instead of being duplicated.
     func insert(_ item: ClipboardItem, imageData: Data? = nil) {
+        guard !isDestroyed else { return }
         var updated = items
         if let index = updated.firstIndex(where: { $0.contentHash == item.contentHash }) {
             var existing = updated.remove(at: index)
@@ -88,6 +91,23 @@ final class HistoryStore: ObservableObject {
             }
         }
         save()
+    }
+
+    /// Uninstall: deletes the whole storage folder (history.json and images/)
+    /// and makes sure no later save can re-create it.
+    func destroyStorage() {
+        isDestroyed = true
+        items = []
+        thumbnailCache.removeAllObjects()
+        let folder = directory
+        // Runs after any write that is still queued.
+        ioQueue.sync {
+            do {
+                try FileManager.default.removeItem(at: folder)
+            } catch {
+                NSLog("Multipaste: could not delete the storage folder: %@", error.localizedDescription)
+            }
+        }
     }
 
     /// Applies the age and count limits. Returns true when something was removed (and saved).
@@ -215,6 +235,7 @@ final class HistoryStore: ObservableObject {
     }
 
     private func save() {
+        guard !isDestroyed else { return }
         let file = HistoryFile(version: 1, items: items)
         let url = historyURL
         ioQueue.async {

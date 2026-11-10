@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+    private var isUninstalling = false
 
     // MARK: - Lifecycle
 
@@ -60,6 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         clipboardMonitor?.stop()
         HotKeyManager.shared.unregister()
         store?.flush()
+        if isUninstalling {
+            // Last thing we do: drop anything written to the defaults while quitting.
+            wipePreferences()
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -235,6 +240,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                     store: store,
                                     onShowOnboarding: { [weak self] in
                                         self?.showOnboarding()
+                                    },
+                                    onUninstall: { [weak self] in
+                                        // Leave the button's action before showing the alert.
+                                        DispatchQueue.main.async {
+                                            self?.confirmUninstall()
+                                        }
                                     })
             settingsWindow = makeWindow(title: "Multipaste Settings",
                                         size: SettingsView.windowSize,
@@ -279,6 +290,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+    }
+
+    // MARK: - Uninstall
+
+    private func confirmUninstall() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "Uninstall Multipaste?"
+        alert.informativeText = "This deletes your entire clipboard history (including saved images) and all Multipaste settings, turns off Launch at Login, and moves Multipaste to the Trash. It cannot be undone."
+        // The first button is the default one (Return), so Cancel goes first.
+        alert.addButton(withTitle: "Cancel")
+        let uninstallButton = alert.addButton(withTitle: "Uninstall")
+        uninstallButton.hasDestructiveAction = true
+        guard alert.runModal() == .alertSecondButtonReturn else { return }
+        uninstall()
+    }
+
+    private func uninstall() {
+        isUninstalling = true
+
+        // Stop everything that could record or write again.
+        clipboardMonitor?.stop()
+        HotKeyManager.shared.unregister()
+        popout?.hide()
+        settingsWindow?.close()
+        onboardingWindow?.close()
+
+        LoginItem.setEnabled(false)
+        store?.destroyStorage()
+        wipePreferences()
+
+        if !moveAppToTrash() {
+            let alert = NSAlert()
+            alert.alertStyle = .informational
+            alert.messageText = "Almost done"
+            alert.informativeText = "Your clipboard history and settings were deleted, but Multipaste could not move itself to the Trash. To finish, drag Multipaste from the Applications folder to the Trash."
+            alert.addButton(withTitle: "Quit Multipaste")
+            alert.runModal()
+        }
+        NSApp.terminate(nil)
+    }
+
+    private func wipePreferences() {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.tylerdooks.multipaste"
+        let defaults = UserDefaults.standard
+        defaults.removePersistentDomain(forName: bundleID)
+        defaults.synchronize()
+        let plist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/\(bundleID).plist")
+        try? FileManager.default.removeItem(at: plist)
+    }
+
+    /// Returns false when the bundle is still where it was.
+    private func moveAppToTrash() -> Bool {
+        let bundleURL = Bundle.main.bundleURL
+        // Only ever trash a real .app bundle, never a bare build folder, and
+        // not the temporary read-only copy macOS runs for quarantined apps.
+        guard bundleURL.pathExtension == "app",
+              !bundleURL.path.contains("/AppTranslocation/") else {
+            return false
+        }
+        do {
+            try FileManager.default.trashItem(at: bundleURL, resultingItemURL: nil)
+            return true
+        } catch {
+            NSLog("Multipaste: could not move the app to the Trash: %@", error.localizedDescription)
+            return false
+        }
     }
 
     // MARK: - Main menu

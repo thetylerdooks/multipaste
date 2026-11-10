@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: HistoryStore
     var onShowOnboarding: () -> Void
+    var onUninstall: () -> Void
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginNeedsApproval = LoginItem.needsApproval
@@ -28,6 +29,7 @@ struct SettingsView: View {
             ignoredAppsSection
             permissionSection
             aboutSection
+            uninstallSection
         }
         .formStyle(.grouped)
         .frame(width: SettingsView.windowSize.width, height: SettingsView.windowSize.height)
@@ -195,6 +197,20 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
             .font(.system(size: 12))
+        }
+    }
+
+    private var uninstallSection: some View {
+        Section {
+            HStack {
+                Text("Deletes all history and settings and moves the app to the Trash.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Uninstall Multipaste…", role: .destructive) {
+                    onUninstall()
+                }
+            }
         }
     }
 
