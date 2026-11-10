@@ -48,6 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                object: nil)
 
         if !settings.hasOnboarded {
+            // Mark it now so closing the window with the red button also counts.
+            settings.hasOnboarded = true
             showOnboarding()
         }
     }
