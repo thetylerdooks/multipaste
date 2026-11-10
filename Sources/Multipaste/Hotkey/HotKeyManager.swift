@@ -38,7 +38,7 @@ final class HotKeyManager {
             isRegistered = true
             return true
         }
-        NSLog("Multipaste: could not register the global shortcut (status %d)", Int(status))
+        NSLog("Multipaste: could not register the global shortcut (status \(status))")
         return false
     }
 
@@ -64,7 +64,7 @@ final class HotKeyManager {
         if status == noErr {
             eventHandlerRef = handlerRef
         } else {
-            NSLog("Multipaste: could not install the hot key handler (status %d)", Int(status))
+            NSLog("Multipaste: could not install the hot key handler (status \(status))")
         }
     }
 }

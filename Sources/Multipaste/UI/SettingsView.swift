@@ -128,8 +128,12 @@ struct SettingsView: View {
                 TextField("App name", text: $newIgnoredApp, prompt: Text("App name, e.g. Notes"))
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit(addIgnoredApp)
-                Button("Add", action: addIgnoredApp)
+                    .onSubmit {
+                        addIgnoredApp()
+                    }
+                Button("Add") {
+                    addIgnoredApp()
+                }
                     .disabled(newIgnoredApp.trimmingCharacters(in: .whitespaces).isEmpty)
                 Button("Defaults") {
                     settings.ignoredApps = AppSettings.defaultIgnoredApps

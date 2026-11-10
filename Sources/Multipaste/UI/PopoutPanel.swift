@@ -112,6 +112,9 @@ final class PopoutController: NSObject {
         let frontmost = NSWorkspace.shared.frontmostApplication
         if let app = frontmost, app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             previousApp = app
+        } else {
+            // Opened while one of our own windows is frontmost: paste stays here.
+            previousApp = nil
         }
 
         model.prepareForOpen()

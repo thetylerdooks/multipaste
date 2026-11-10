@@ -44,7 +44,7 @@ You can also click an item to paste it, and clicking anywhere outside the popout
 
 ## Install
 
-1. Download `Multipaste-1.5.0.dmg` from the [Releases](../../releases) page.
+1. Download `Multipaste-1.5.0.dmg` from the [Releases](https://github.com/thetylerdooks/multipaste/releases/latest) page.
 2. Open the DMG and drag **Multipaste** into **Applications**.
 3. Launch it. Because the app is not notarized by Apple, macOS Gatekeeper will block the first launch. Use any one of these:
    - Right-click (or Control-click) Multipaste in Applications and choose **Open**, then **Open** again.
@@ -85,8 +85,8 @@ If you skip this, Multipaste still works: it puts the item on the clipboard and 
 You need a Mac with Xcode (or the Xcode Command Line Tools for a single-architecture build).
 
 ```sh
-git clone https://github.com/dooks-git/Multipaste.git
-cd Multipaste
+git clone https://github.com/thetylerdooks/multipaste.git
+cd multipaste
 bash Scripts/build_app.sh
 ```
 

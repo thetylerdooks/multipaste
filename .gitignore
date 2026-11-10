@@ -9,6 +9,10 @@ build/
 # macOS
 .DS_Store
 
+# Local scratch files
+PROMPT_BUILD.md
+claude_run*.log
+
 # Xcode user data
 xcuserdata/
 *.xcodeproj/xcuserdata/
