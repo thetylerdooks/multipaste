@@ -1,0 +1,57 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Multipaste.app
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain versions
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build, sign and package
+        env:
+          REQUIRE_UNIVERSAL: "1"
+        run: bash Scripts/build_app.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Multipaste
+          path: |
+            build/*.dmg
+            build/*.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/*.dmg
+            build/*.zip
+          body: |
+            ## Install
+
+            1. Download the `.dmg` below, open it and drag **Multipaste** into **Applications**.
+            2. Multipaste is ad-hoc signed and not notarized, so the first launch needs one extra step:
+               right-click the app and choose **Open**, or go to **System Settings > Privacy & Security** and click **Open Anyway**.
+               From Terminal you can instead run `xattr -dr com.apple.quarantine /Applications/Multipaste.app`.
+            3. Allow **Accessibility** when asked, so Multipaste can press ⌘V for you.
+            4. Press **⇧⌘V** anywhere to open your clipboard history.
+
+            Multipaste is fully local and contains no networking code.

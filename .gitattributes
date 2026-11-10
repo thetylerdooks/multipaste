@@ -1,0 +1,7 @@
+# The repo is edited on Windows but built on macOS: keep LF everywhere so
+# bash and the Swift compiler never see CRLF.
+* text=auto eol=lf
+*.sh text eol=lf
+*.swift text eol=lf
+*.plist text eol=lf
+*.yml text eol=lf
