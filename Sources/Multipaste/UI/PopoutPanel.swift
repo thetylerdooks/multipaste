@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 /// Borderless floating panel. It can become key (so the search field gets
@@ -20,7 +21,8 @@ final class PopoutPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         isMovableByWindowBackground = false
-        animationBehavior = .utilityWindow
+        // The controller runs its own pop animation.
+        animationBehavior = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     }
 
@@ -47,20 +49,31 @@ final class PopoutController: NSObject {
     private let panel: PopoutPanel
     private let toast = HintToast()
     private var keyMonitor: Any?
-    private var isHiding = false
     private var previousApp: NSRunningApplication?
     private weak var searchField: NSTextField?
 
-    var isVisible: Bool { panel.isVisible }
+    /// The rounded, vibrant bubble. Its layer is what scales during the pop animation.
+    private let effectView: NSVisualEffectView
+    /// Logical state. The panel itself stays on screen a moment longer while it animates out.
+    private var isShown = false
+    /// Bumped on every show / hide so a stale close animation can never hide a reopened panel.
+    private var animationGeneration = 0
+    /// Point (in the bubble's own coordinates) the pop grows out of: the spot nearest the pointer.
+    private var popAnchor = CGPoint.zero
+
+    private static let popAnimationKey = "multipaste.pop"
+    private static let closeDuration: TimeInterval = 0.12
+
+    var isVisible: Bool { isShown }
 
     init(store: HistoryStore) {
+        let frame = NSRect(origin: .zero, size: PopoutController.panelSize)
         self.store = store
         self.model = PopoutViewModel(store: store)
         self.panel = PopoutPanel(contentSize: PopoutController.panelSize)
+        self.effectView = NSVisualEffectView(frame: frame)
         super.init()
 
-        let frame = NSRect(origin: .zero, size: PopoutController.panelSize)
-        let effectView = NSVisualEffectView(frame: frame)
         effectView.material = .popover
         effectView.blendingMode = .behindWindow
         effectView.state = .active
@@ -73,7 +86,14 @@ final class PopoutController: NSObject {
         hostingView.frame = effectView.bounds
         hostingView.autoresizingMask = [.width, .height]
         effectView.addSubview(hostingView)
-        panel.contentView = effectView
+
+        // The bubble sits in a transparent container that always fills the
+        // window, so the window frame never changes while the bubble scales.
+        let container = NSView(frame: frame)
+        container.wantsLayer = true
+        effectView.autoresizingMask = [.width, .height]
+        container.addSubview(effectView)
+        panel.contentView = container
 
         panel.onResignKey = { [weak self] in
             self?.hide()
@@ -88,11 +108,11 @@ final class PopoutController: NSObject {
             self?.hide()
         }
         model.onOpenSettings = { [weak self] in
-            self?.hide()
+            self?.hide(animated: false)
             self?.onOpenSettings?()
         }
         model.onShowOnboarding = { [weak self] in
-            self?.hide()
+            self?.hide(animated: false)
             self?.onShowOnboarding?()
         }
     }
@@ -100,7 +120,7 @@ final class PopoutController: NSObject {
     // MARK: - Showing and hiding
 
     func toggle() {
-        if panel.isVisible {
+        if isShown {
             hide()
         } else {
             show()
@@ -117,26 +137,121 @@ final class PopoutController: NSObject {
             previousApp = nil
         }
 
+        // Cancel whatever animation (opening or closing) is still running.
+        animationGeneration += 1
+        isShown = true
+        effectView.layer?.removeAnimation(forKey: PopoutController.popAnimationKey)
+        panel.ignoresMouseEvents = false
+
         model.prepareForOpen()
         positionAtPointer()
+        panel.alphaValue = 0
         panel.orderFrontRegardless()
+        // Keyboard focus is immediate; only the looks are animated.
         panel.makeKey()
         panel.invalidateShadow()
         installKeyMonitor()
+        focusSearchField(selectAll: false)
+        animateIn()
 
         DispatchQueue.main.async { [weak self] in
             self?.focusSearchField(selectAll: false)
         }
     }
 
-    func hide() {
-        guard !isHiding else { return }
-        isHiding = true
+    /// Closes the popout. A paste passes `animated: false`: the panel must be
+    /// gone at once so the previous app has the keyboard when ⌘V is sent.
+    func hide(animated: Bool = true) {
+        // Ordering out makes the panel resign key, which calls hide() again.
+        guard isShown else { return }
+        isShown = false
+        animationGeneration += 1
         removeKeyMonitor()
+
+        guard animated, panel.isVisible else {
+            orderOutNow()
+            return
+        }
+
+        // No more clicks on a panel that is on its way out.
+        panel.ignoresMouseEvents = true
+        animateOut()
+
+        let generation = animationGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + PopoutController.closeDuration) { [weak self] in
+            guard let controller = self,
+                  controller.animationGeneration == generation,
+                  !controller.isShown else { return }
+            controller.orderOutNow()
+        }
+    }
+
+    private func orderOutNow() {
         if panel.isVisible {
             panel.orderOut(nil)
         }
-        isHiding = false
+        effectView.layer?.removeAnimation(forKey: PopoutController.popAnimationKey)
+        panel.alphaValue = 1
+        panel.ignoresMouseEvents = false
+    }
+
+    // MARK: - Pop animation
+
+    private var reduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    /// Fade in, plus a springy scale-up out of the pointer unless Reduce Motion is on.
+    private func animateIn() {
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0.16
+        panel.animator().alphaValue = 1
+        NSAnimationContext.endGrouping()
+
+        guard !reduceMotion, let layer = effectView.layer else { return }
+        // Roughly SwiftUI's .spring(response: 0.25, dampingFraction: 0.72).
+        let spring = CASpringAnimation(keyPath: "transform")
+        spring.fromValue = NSValue(caTransform3D: scaleTransform(0.85, for: layer))
+        spring.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        spring.mass = 1
+        spring.stiffness = 632
+        spring.damping = 36
+        spring.initialVelocity = 0
+        spring.duration = min(spring.settlingDuration, 0.6)
+        layer.add(spring, forKey: PopoutController.popAnimationKey)
+    }
+
+    /// Quick fade out, plus a small scale-down unless Reduce Motion is on.
+    private func animateOut() {
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = PopoutController.closeDuration
+        panel.animator().alphaValue = 0
+        NSAnimationContext.endGrouping()
+
+        guard !reduceMotion, let layer = effectView.layer else { return }
+        let shrink = CABasicAnimation(keyPath: "transform")
+        shrink.fromValue = NSValue(caTransform3D: CATransform3DIdentity)
+        shrink.toValue = NSValue(caTransform3D: scaleTransform(0.9, for: layer))
+        shrink.duration = PopoutController.closeDuration
+        shrink.timingFunction = CAMediaTimingFunction(name: .easeIn)
+        // Stay small until the panel is ordered out (the animation is removed then).
+        shrink.fillMode = .forwards
+        shrink.isRemovedOnCompletion = false
+        layer.add(shrink, forKey: PopoutController.popAnimationKey)
+    }
+
+    /// A scale that keeps `popAnchor` fixed. Only ever used inside an explicit
+    /// animation, so the layer's own (AppKit-managed) geometry is never changed.
+    private func scaleTransform(_ scale: CGFloat, for layer: CALayer) -> CATransform3D {
+        let bounds = layer.bounds
+        let originX = bounds.minX + layer.anchorPoint.x * bounds.width
+        let originY = bounds.minY + layer.anchorPoint.y * bounds.height
+        let dx = popAnchor.x - originX
+        let dy = popAnchor.y - originY
+        var transform = CATransform3DMakeTranslation(dx, dy, 0)
+        transform = CATransform3DScale(transform, scale, scale, 1)
+        transform = CATransform3DTranslate(transform, -dx, -dy, 0)
+        return transform
     }
 
     /// Opens the panel at the mouse pointer, flipping / shifting so it stays
@@ -150,6 +265,7 @@ final class PopoutController: NSObject {
         guard let visible = screen?.visibleFrame else {
             panel.setContentSize(size)
             panel.center()
+            popAnchor = CGPoint(x: size.width / 2, y: size.height / 2)
             return
         }
 
@@ -168,6 +284,11 @@ final class PopoutController: NSObject {
         y = max(visible.minY + gap, min(y, visible.maxY - size.height - gap))
 
         panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
+
+        // The pointer's position relative to the final frame, clamped onto the
+        // panel: the nearest corner (or edge point) after any flip or shift.
+        popAnchor = CGPoint(x: max(0, min(mouse.x - x, size.width)),
+                            y: max(0, min(mouse.y - y, size.height)))
     }
 
     // MARK: - Keyboard
@@ -305,7 +426,8 @@ final class PopoutController: NSObject {
     /// The one paste routine shared by history items and emoji / kaomoji / symbols.
     private func finishPaste(movingToTop itemID: UUID?) {
         let target = previousApp
-        hide()
+        // Not animated: the paste must not wait for (or race with) the close animation.
+        hide(animated: false)
 
         if let app = target, !app.isTerminated {
             _ = app.activate(options: [])
