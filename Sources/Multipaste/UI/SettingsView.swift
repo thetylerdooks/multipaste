@@ -10,6 +10,7 @@ struct SettingsView: View {
     var onShowOnboarding: () -> Void
 
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var loginNeedsApproval = LoginItem.needsApproval
     @State private var accessibilityTrusted = AccessibilityPermission.isTrusted
     @State private var newIgnoredApp = ""
     @State private var confirmClear = false
@@ -33,6 +34,7 @@ struct SettingsView: View {
         .onReceive(refreshTimer) { _ in
             accessibilityTrusted = AccessibilityPermission.isTrusted
             launchAtLogin = LoginItem.isEnabled
+            loginNeedsApproval = LoginItem.needsApproval
         }
         .onChange(of: settings.maxItems) { _ in
             store.prune()
@@ -65,6 +67,18 @@ struct SettingsView: View {
     private var generalSection: some View {
         Section("General") {
             Toggle("Launch at login", isOn: launchAtLoginBinding)
+            if loginNeedsApproval {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("Needs approval in System Settings.")
+                        .font(.system(size: 12))
+                    Spacer()
+                    Button("Open Login Items Settings") {
+                        LoginItem.openLoginItemsSettings()
+                    }
+                }
+            }
             Toggle("Pause recording", isOn: $settings.paused)
         }
     }
@@ -75,6 +89,7 @@ struct SettingsView: View {
             set: { newValue in
                 LoginItem.setEnabled(newValue)
                 launchAtLogin = LoginItem.isEnabled
+                loginNeedsApproval = LoginItem.needsApproval
             }
         )
     }

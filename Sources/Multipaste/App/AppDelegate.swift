@@ -47,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                name: .multipasteHotKeyChanged,
                                                object: nil)
 
+        LoginItem.applyDefaultIfNeeded()
+
         if !settings.hasOnboarded {
             // Mark it now so closing the window with the red button also counts.
             settings.hasOnboarded = true
@@ -128,7 +130,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         openMenuItem?.title = "Open Multipaste  (\(settings.hotKeyDisplay))"
         pauseMenuItem?.state = settings.paused ? .on : .off
-        launchAtLoginMenuItem?.state = LoginItem.isEnabled ? .on : .off
+        if LoginItem.needsApproval {
+            launchAtLoginMenuItem?.state = .mixed
+        } else {
+            launchAtLoginMenuItem?.state = LoginItem.isEnabled ? .on : .off
+        }
     }
 
     // MARK: - Menu actions
@@ -149,14 +155,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleLaunchAtLogin(_ sender: Any?) {
+        if LoginItem.needsApproval {
+            offerLoginItemApproval(canTurnOff: true)
+            return
+        }
         let enable = !LoginItem.isEnabled
-        if !LoginItem.setEnabled(enable) {
+        let changed = LoginItem.setEnabled(enable)
+        if enable && LoginItem.needsApproval {
+            offerLoginItemApproval(canTurnOff: false)
+        } else if !changed {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.messageText = "Could not change Launch at Login"
             alert.informativeText = "Move Multipaste to the Applications folder and try again, or manage it in System Settings > General > Login Items."
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        }
+    }
+
+    /// macOS has the login item switched off or awaiting approval in System Settings.
+    private func offerLoginItemApproval(canTurnOff: Bool) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Launch at Login needs your approval"
+        alert.informativeText = "Allow Multipaste under System Settings > General > Login Items so it can start when you log in."
+        alert.addButton(withTitle: "Open Login Items Settings")
+        if canTurnOff {
+            alert.addButton(withTitle: "Turn Off")
+        }
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            LoginItem.openLoginItemsSettings()
+        } else if canTurnOff && response == .alertSecondButtonReturn {
+            LoginItem.setEnabled(false)
         }
     }
 

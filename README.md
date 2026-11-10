@@ -24,7 +24,8 @@ Version 1.5.0 · macOS 13 Ventura or later · Apple silicon and Intel
 - **Emoji, Kaomoji and Symbols tabs** with built-in, searchable sets.
 - **Skips secrets.** Items that password managers mark as concealed or transient are never recorded, and you can add any app to an ignore list (Keychain Access, 1Password and Bitwarden are ignored by default).
 - **Limits you control:** maximum number of items, maximum age, maximum image size, plus Pause Recording and Clear History.
-- **Configurable shortcut** and Launch at Login.
+- **Starts at login by default**, so your history is always there. You can turn this off in Settings or from the menu-bar icon.
+- **Configurable shortcut.**
 - Lives in the menu bar. No Dock icon.
 
 ## Keyboard shortcuts
@@ -54,6 +55,7 @@ You can also click an item to paste it, and clicking anywhere outside the popout
      xattr -dr com.apple.quarantine /Applications/Multipaste.app
      ```
 4. A clipboard icon appears in the menu bar and the welcome window opens.
+5. Multipaste starts automatically when you log in. You can turn this off in Settings or with **Launch at Login** in the menu-bar menu. macOS may show a "Login Item Added" notification the first time; if it asks for approval, allow Multipaste under **System Settings > General > Login Items**.
 
 ### Grant Accessibility access
 

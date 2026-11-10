@@ -4,7 +4,7 @@ import SwiftUI
 
 /// First-run welcome window: what Multipaste does and why it asks for Accessibility.
 struct OnboardingView: View {
-    static let windowSize = NSSize(width: 500, height: 620)
+    static let windowSize = NSSize(width: 500, height: 680)
 
     @ObservedObject var settings: AppSettings
     var onDone: () -> Void
@@ -26,6 +26,9 @@ struct OnboardingView: View {
             step(symbol: "lock.shield",
                  title: "Private by design",
                  text: "Everything stays on this Mac. Multipaste has no networking code at all, and it skips passwords from password managers.")
+            step(symbol: "power",
+                 title: "Starts with your Mac",
+                 text: "Multipaste starts automatically when you log in. You can turn this off in Settings.")
             Spacer(minLength: 0)
             HStack {
                 Spacer()
