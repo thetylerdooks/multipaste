@@ -290,16 +290,20 @@ final class PopoutController: NSObject {
             NSSound.beep()
             return
         }
-        store.moveToTop(id: item.id)
-        finishPaste()
+        // The history is deliberately NOT touched here. Reordering it publishes a
+        // change that re-renders the popout while it is closing, and that was the
+        // only difference from the emoji path, which pastes reliably. The item is
+        // moved to the top once the keystroke has been sent.
+        finishPaste(movingToTop: item.id)
     }
 
     private func paste(text: String) {
         PasteService.copy(text: text)
-        finishPaste()
+        finishPaste(movingToTop: nil)
     }
 
-    private func finishPaste() {
+    /// The one paste routine shared by history items and emoji / kaomoji / symbols.
+    private func finishPaste(movingToTop itemID: UUID?) {
         let target = previousApp
         hide()
 
@@ -312,6 +316,10 @@ final class PopoutController: NSObject {
                 PasteService.sendPasteKeystroke()
             } else {
                 self?.toast.show("Copied. Press ⌘V to paste.\nAllow Accessibility in Multipaste Settings to paste automatically.")
+            }
+            guard let id = itemID else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.store.moveToTop(id: id)
             }
         }
     }

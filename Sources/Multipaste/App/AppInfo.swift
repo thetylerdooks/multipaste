@@ -5,11 +5,11 @@ enum AppInfo {
     static let tagline = "Everything you copied, one shortcut away."
 
     static var version: String {
-        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.5.0"
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.5.1"
     }
 
     static var build: String {
-        (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "342"
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "343"
     }
 }
 

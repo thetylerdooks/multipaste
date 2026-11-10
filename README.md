@@ -6,7 +6,7 @@ Windows has had a clipboard history for years: press Win+V and pick from the las
 
 It is open source (MIT), runs entirely on your Mac, and contains no networking code.
 
-Version 1.5.0 · macOS 13 Ventura or later · Apple silicon and Intel
+Version 1.5.1 · macOS 13 Ventura or later · Apple silicon and Intel
 
 ## Features
 
@@ -45,7 +45,7 @@ You can also click an item to paste it, and clicking anywhere outside the popout
 
 ## Install
 
-1. Download `Multipaste-1.5.0.dmg` from the [Releases](https://github.com/thetylerdooks/multipaste/releases/latest) page.
+1. Download `Multipaste-1.5.1.dmg` from the [Releases](https://github.com/thetylerdooks/multipaste/releases/latest) page.
 2. Open the DMG and drag **Multipaste** into **Applications**.
 3. Launch it. Because the app is not notarized by Apple, macOS Gatekeeper will block the first launch. Use any one of these:
    - Right-click (or Control-click) Multipaste in Applications and choose **Open**, then **Open** again.
