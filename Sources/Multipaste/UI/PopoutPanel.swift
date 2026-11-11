@@ -43,7 +43,9 @@ final class PopoutController: NSObject {
 
     let model: PopoutViewModel
     var onOpenSettings: (() -> Void)?
-    var onShowOnboarding: (() -> Void)?
+    /// Asks the app to prompt for Accessibility. `force` skips the rate limit;
+    /// returns false when the prompt was skipped because it was shown recently.
+    var onRequestAccessibility: ((_ force: Bool) -> Bool)?
 
     private let store: HistoryStore
     private let panel: PopoutPanel
@@ -63,6 +65,10 @@ final class PopoutController: NSObject {
 
     private static let popAnimationKey = "multipaste.pop"
     private static let closeDuration: TimeInterval = 0.12
+    /// ⌘V is sent no sooner than this after the panel closes...
+    private static let minimumPasteDelay: TimeInterval = 0.13
+    /// ...and no later than this, even if the target app never reports itself frontmost.
+    private static let maximumPasteDelay: TimeInterval = 0.6
 
     var isVisible: Bool { isShown }
 
@@ -111,9 +117,9 @@ final class PopoutController: NSObject {
             self?.hide(animated: false)
             self?.onOpenSettings?()
         }
-        model.onShowOnboarding = { [weak self] in
+        model.onRequestAccessibility = { [weak self] in
             self?.hide(animated: false)
-            self?.onShowOnboarding?()
+            _ = self?.onRequestAccessibility?(true)
         }
     }
 
@@ -428,21 +434,51 @@ final class PopoutController: NSObject {
         let target = previousApp
         // Not animated: the paste must not wait for (or race with) the close animation.
         hide(animated: false)
+        // hide() does nothing if the panel was already closing; make sure it is gone.
+        orderOutNow()
 
         if let app = target, !app.isTerminated {
             _ = app.activate(options: [])
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) { [weak self] in
+        whenReadyToPaste(into: target, since: Date()) { [weak self] in
+            guard let controller = self else { return }
             if AccessibilityPermission.isTrusted {
                 PasteService.sendPasteKeystroke()
             } else {
-                self?.toast.show("Copied. Press ⌘V to paste.\nAllow Accessibility in Multipaste Settings to paste automatically.")
+                // The item is on the clipboard either way. Ask for access again
+                // (rate-limited); in between, the toast is enough.
+                let prompted = controller.onRequestAccessibility?(false) ?? false
+                if !prompted {
+                    controller.toast.show("Copied. Press ⌘V to paste.\nAllow Accessibility in Multipaste Settings to paste automatically.")
+                }
             }
             guard let id = itemID else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.store.moveToTop(id: id)
             }
+        }
+    }
+
+    /// Runs `action` once the panel is off screen and `target` (the app the
+    /// paste is for) is frontmost, so ⌘V lands in the right app. Waits at
+    /// least `minimumPasteDelay` and stops waiting after `maximumPasteDelay`.
+    private func whenReadyToPaste(into target: NSRunningApplication?, since start: Date, _ action: @escaping () -> Void) {
+        let elapsed = Date().timeIntervalSince(start)
+        let targetIsFrontmost: Bool
+        if let app = target, !app.isTerminated {
+            targetIsFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier
+        } else {
+            // Pasting into one of our own windows, or the app has quit.
+            targetIsFrontmost = true
+        }
+        let ready = targetIsFrontmost && !panel.isVisible && elapsed >= PopoutController.minimumPasteDelay
+        if ready || elapsed >= PopoutController.maximumPasteDelay {
+            action()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            self?.whenReadyToPaste(into: target, since: start, action)
         }
     }
 }

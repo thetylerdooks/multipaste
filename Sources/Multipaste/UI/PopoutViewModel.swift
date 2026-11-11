@@ -59,10 +59,12 @@ final class PopoutViewModel: ObservableObject {
     var onPasteText: ((String) -> Void)?
     var onClose: (() -> Void)?
     var onOpenSettings: (() -> Void)?
-    var onShowOnboarding: (() -> Void)?
+    var onRequestAccessibility: (() -> Void)?
 
     init(store: HistoryStore) {
         self.store = store
+        // Follows the shared monitor, so the banner disappears the moment access is granted.
+        AccessibilityMonitor.shared.$isTrusted.assign(to: &$accessibilityTrusted)
     }
 
     // MARK: - Visible content
@@ -92,7 +94,7 @@ final class PopoutViewModel: ObservableObject {
         query = ""
         tab = .clipboard
         selection = 0
-        accessibilityTrusted = AccessibilityPermission.isTrusted
+        AccessibilityMonitor.shared.start()
         focusToken += 1
     }
 

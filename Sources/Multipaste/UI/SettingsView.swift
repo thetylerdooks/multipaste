@@ -12,7 +12,7 @@ struct SettingsView: View {
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginNeedsApproval = LoginItem.needsApproval
-    @State private var accessibilityTrusted = AccessibilityPermission.isTrusted
+    @ObservedObject private var accessibility = AccessibilityMonitor.shared
     @State private var newIgnoredApp = ""
     @State private var confirmClear = false
 
@@ -34,9 +34,10 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: SettingsView.windowSize.width, height: SettingsView.windowSize.height)
         .onReceive(refreshTimer) { _ in
-            accessibilityTrusted = AccessibilityPermission.isTrusted
             launchAtLogin = LoginItem.isEnabled
             loginNeedsApproval = LoginItem.needsApproval
+            // Also notices the permission being switched off while Settings is open.
+            accessibility.start()
         }
         .onChange(of: settings.maxItems) { _ in
             store.prune()
@@ -166,17 +167,23 @@ struct SettingsView: View {
     private var permissionSection: some View {
         Section("Accessibility") {
             HStack {
-                Image(systemName: accessibilityTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundColor(accessibilityTrusted ? .green : .orange)
-                Text(accessibilityTrusted
+                Image(systemName: accessibility.isTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundColor(accessibility.isTrusted ? .green : .orange)
+                Text(accessibility.isTrusted
                      ? "Allowed. Multipaste can paste for you."
                      : "Not allowed. Items are copied, then you press ⌘V yourself.")
                 Spacer()
-                if !accessibilityTrusted {
+                if !accessibility.isTrusted {
                     Button("Open Settings") {
                         AccessibilityPermission.openSystemSettings()
                     }
                 }
+            }
+            if !accessibility.isTrusted {
+                Text("Multipaste already switched on in that list? Remove it with the − button and add it again, or switch it off and on.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Button("Show Welcome Guide Again") {
                 onShowOnboarding()

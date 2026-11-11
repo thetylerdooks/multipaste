@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -14,7 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+    private var accessibilityWindow: NSWindow?
     private var isUninstalling = false
+
+    private let accessibility = AccessibilityMonitor.shared
+    private var accessibilityObserver: AnyCancellable?
+    private var lastAccessibilityPrompt: Date?
+    /// A paste without Accessibility access re-prompts at most this often.
+    private static let accessibilityPromptInterval: TimeInterval = 60
 
     // MARK: - Lifecycle
 
@@ -32,8 +40,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         popoutController.onOpenSettings = { [weak self] in
             self?.showSettings()
         }
-        popoutController.onShowOnboarding = { [weak self] in
-            self?.showOnboarding()
+        popoutController.onRequestAccessibility = { [weak self] force in
+            self?.requestAccessibility(force: force) ?? false
         }
         popout = popoutController
 
@@ -50,11 +58,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         LoginItem.applyDefaultIfNeeded()
 
+        accessibilityObserver = accessibility.$isTrusted
+            .removeDuplicates()
+            .filter { $0 }
+            .sink { [weak self] _ in
+                // Granted: the explanation window has done its job. Let the
+                // publisher finish before closing a window that observes it.
+                DispatchQueue.main.async {
+                    self?.accessibilityWindow?.close()
+                }
+            }
+        accessibility.start()
+
         if !settings.hasOnboarded {
             // Mark it now so closing the window with the red button also counts.
             settings.hasOnboarded = true
+            // The welcome window explains Accessibility too, so it stands in
+            // for the permission window on first run.
             showOnboarding()
         }
+        // Every launch without access asks again, not just the first one: a
+        // re-signed update can lose the permission even after onboarding.
+        if !accessibility.isTrusted {
+            requestAccessibility(force: true)
+        }
+    }
+
+    // MARK: - Accessibility
+
+    /// Shows the explanation window (or the welcome window, if it is open)
+    /// and macOS's own Accessibility prompt. Unless `force` is set it does
+    /// nothing if it already asked within `accessibilityPromptInterval`.
+    /// Returns whether it asked.
+    @discardableResult
+    private func requestAccessibility(force: Bool) -> Bool {
+        accessibility.start()
+        guard !accessibility.isTrusted else { return false }
+        if !force, let last = lastAccessibilityPrompt,
+           Date().timeIntervalSince(last) < AppDelegate.accessibilityPromptInterval {
+            return false
+        }
+        lastAccessibilityPrompt = Date()
+
+        if let welcome = onboardingWindow, welcome.isVisible {
+            present(welcome)
+        } else {
+            showAccessibilityWindow()
+        }
+        // After our window, so the system prompt ends up in front of it.
+        DispatchQueue.main.async {
+            AccessibilityPermission.requestWithPrompt()
+        }
+        return true
+    }
+
+    private func showAccessibilityWindow() {
+        if accessibilityWindow == nil {
+            let view = AccessibilityPromptView(monitor: accessibility,
+                                               onClose: { [weak self] in
+                                                   self?.accessibilityWindow?.close()
+                                               })
+            accessibilityWindow = makeWindow(title: "Allow Accessibility",
+                                             size: AccessibilityPromptView.windowSize,
+                                             content: NSHostingController(rootView: view))
+        }
+        present(accessibilityWindow)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -257,6 +325,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func showOnboarding() {
         if onboardingWindow == nil {
             let view = OnboardingView(settings: settings,
+                                      accessibility: accessibility,
                                       onDone: { [weak self] in
                                           self?.finishOnboarding()
                                       })
@@ -317,6 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         popout?.hide()
         settingsWindow?.close()
         onboardingWindow?.close()
+        accessibilityWindow?.close()
 
         LoginItem.setEnabled(false)
         store?.destroyStorage()

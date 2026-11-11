@@ -6,7 +6,7 @@ Windows has had a clipboard history for years: press Win+V and pick from the las
 
 It is open source (MIT), runs entirely on your Mac, and contains no networking code.
 
-Version 1.5.2 · macOS 13 Ventura or later · Apple silicon and Intel
+Version 1.5.3 · macOS 13 Ventura or later · Apple silicon and Intel
 
 ## Features
 
@@ -45,7 +45,7 @@ You can also click an item to paste it, and clicking anywhere outside the popout
 
 ## Install
 
-1. Download `Multipaste-1.5.2.dmg` from the [Releases](https://github.com/thetylerdooks/multipaste/releases/latest) page.
+1. Download `Multipaste-1.5.3.dmg` from the [Releases](https://github.com/thetylerdooks/multipaste/releases/latest) page.
 2. Open the DMG and drag **Multipaste** into **Applications**.
 3. Launch it. New releases are signed with an Apple Developer ID and notarized by Apple, so they open normally.
    Version 1.5.1 and earlier were ad-hoc signed and not notarized, so macOS Gatekeeper blocks their first launch. For those versions, use any one of these:
@@ -62,8 +62,14 @@ You can also click an item to paste it, and clicking anywhere outside the popout
 
 Multipaste asks for Accessibility access for one reason: to press ⌘V for you in the app you were using, so the item you picked is pasted immediately. It never reads your screen or your keystrokes.
 
-- Click **Allow Accessibility…** in the welcome window, or
+When it starts without that access, Multipaste shows the macOS permission prompt and a short window explaining why. It does this on every launch until access is allowed, and again if you pick an item while access is missing.
+
+- Click **Open Accessibility Settings** (or **Allow Accessibility…** in the welcome window), or
 - open **System Settings > Privacy & Security > Accessibility** and switch on **Multipaste**.
+
+Multipaste notices the change within a second. You don't need to restart it.
+
+If Multipaste is already switched on in that list but still can't paste, the entry is from an older copy of the app. Select it, remove it with the **−** button, then add Multipaste again with **+** (or switch it off and on).
 
 If you skip this, Multipaste still works: it puts the item on the clipboard and you press ⌘V yourself.
 
