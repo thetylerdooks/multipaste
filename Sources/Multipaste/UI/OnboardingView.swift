@@ -4,14 +4,13 @@ import SwiftUI
 
 /// First-run welcome window: what Multipaste does and why it asks for Accessibility.
 struct OnboardingView: View {
-    static let windowSize = NSSize(width: 500, height: 680)
+    static let windowSize = NSSize(width: 500, height: 710)
 
     @ObservedObject var settings: AppSettings
+    @ObservedObject var accessibility: AccessibilityMonitor
     var onDone: () -> Void
 
-    @State private var accessibilityTrusted = AccessibilityPermission.isTrusted
-
-    private let refreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private var accessibilityTrusted: Bool { accessibility.isTrusted }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -41,8 +40,8 @@ struct OnboardingView: View {
         }
         .padding(28)
         .frame(width: OnboardingView.windowSize.width, height: OnboardingView.windowSize.height)
-        .onReceive(refreshTimer) { _ in
-            accessibilityTrusted = AccessibilityPermission.isTrusted
+        .onAppear {
+            accessibility.start()
         }
     }
 
@@ -94,6 +93,12 @@ struct OnboardingView: View {
                 Button("Open Accessibility Settings") {
                     AccessibilityPermission.openSystemSettings()
                 }
+            }
+            if !accessibilityTrusted {
+                Text("Multipaste already switched on in the list? Remove it with the − button and add it again, or switch it off and on.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)

@@ -78,7 +78,7 @@ struct PopoutView: View {
     }
 
     private var accessibilityBanner: some View {
-        Button(action: { model.onShowOnboarding?() }) {
+        Button(action: { model.onRequestAccessibility?() }) {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(.orange)
