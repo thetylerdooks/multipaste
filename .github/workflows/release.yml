@@ -10,6 +10,8 @@ name: Release
 on:
   push:
     tags: ['v*']
+    # TEMP: remove before merge (branch dry-run trigger)
+    branches: [kit/release-automation]
   workflow_dispatch:
 
 permissions:
