@@ -47,7 +47,8 @@ You can also click an item to paste it, and clicking anywhere outside the popout
 
 1. Download `Multipaste-1.5.1.dmg` from the [Releases](https://github.com/thetylerdooks/multipaste/releases/latest) page.
 2. Open the DMG and drag **Multipaste** into **Applications**.
-3. Launch it. Because the app is not notarized by Apple, macOS Gatekeeper will block the first launch. Use any one of these:
+3. Launch it. New releases are signed with an Apple Developer ID and notarized by Apple, so they open normally.
+   Version 1.5.1 and earlier were ad-hoc signed and not notarized, so macOS Gatekeeper blocks their first launch. For those versions, use any one of these:
    - Right-click (or Control-click) Multipaste in Applications and choose **Open**, then **Open** again.
    - Or try to open it once, then go to **System Settings > Privacy & Security**, scroll down and click **Open Anyway**.
    - Or run this in Terminal:
@@ -110,12 +111,13 @@ bash Scripts/build_app.sh
 
 The script builds a universal binary with Swift Package Manager, assembles `build/Multipaste.app`, ad-hoc signs it and creates `build/Multipaste-<version>.dmg` and `build/Multipaste-<version>.zip`. The version comes from the `VERSION` file.
 
-There are no third-party dependencies. Every push to `main` and every pull request is built by GitHub Actions (`.github/workflows/build.yml`); pushing a tag that starts with `v` also publishes a release with the DMG and ZIP attached.
+You can pass `SIGN_IDENTITY="Developer ID Application: …"` to sign with your own certificate and the hardened runtime instead of ad-hoc.
+
+There are no third-party dependencies. Every push to `main` and every pull request is built by GitHub Actions (`.github/workflows/build.yml`). Pushing a tag that starts with `v` runs `.github/workflows/release.yml`, which signs the app with a Developer ID certificate, has Apple notarize it and publishes a release with the DMG, ZIP and SHA-256 checksums attached. See [RELEASING.md](RELEASING.md).
 
 ## Known limitations
 
-- **Ad-hoc signed, not notarized.** That is why the first launch needs the Gatekeeper step above.
-- **Accessibility may need re-granting after an update.** macOS ties the permission to the app's signature, and an ad-hoc signature changes with every build. If auto-paste stops working after you update, remove Multipaste from the Accessibility list in System Settings and add it again.
+- **Accessibility may need re-granting once when you update from 1.5.1 or earlier.** macOS ties the permission to the app's signature. Those versions were ad-hoc signed, and an ad-hoc signature changes with every build. Developer ID signed releases keep the same identity across updates. If auto-paste stops working after you update, remove Multipaste from the Accessibility list in System Settings and add it again.
 - Launch at Login works best when the app is in `/Applications`.
 - Only the global shortcut and the menu-bar icon open Multipaste. There are no mouse or desktop click hooks.
 - The history has no pinning or favourites.

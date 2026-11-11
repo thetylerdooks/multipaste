@@ -1,25 +1,36 @@
 #!/usr/bin/env bash
-# Builds Multipaste.app (universal: arm64 + x86_64), ad-hoc signs it and
-# packages a DMG and a ZIP into ./build.
+# Builds Multipaste.app (universal: arm64 + x86_64), signs it (ad-hoc by
+# default) and packages a DMG and a ZIP into ./build.
 #
 # Usage: bash Scripts/build_app.sh
 # Env:   REQUIRE_UNIVERSAL=1  fail instead of falling back to a host-only build
+#        VERSION=1.2.3        override the marketing version (default: VERSION file)
+#        SIGN_IDENTITY=...    codesign identity (default "-", ad-hoc). Any other
+#                             value signs with the hardened runtime and a secure
+#                             timestamp, as needed for notarization.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 APP_NAME="Multipaste"
-VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+if [[ -n "${VERSION:-}" ]]; then
+  VERSION="$(printf '%s' "$VERSION" | tr -d '[:space:]')"
+else
+  VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+fi
 if [[ -z "$VERSION" ]]; then
   echo "error: VERSION file is empty" >&2
   exit 1
 fi
+if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+  echo "error: version '$VERSION' is not of the form 1.2.3" >&2
+  exit 1
+fi
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 
 BUILD_DIR="$ROOT/build"
 APP="$BUILD_DIR/$APP_NAME.app"
-DMG="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
-ZIP="$BUILD_DIR/$APP_NAME-$VERSION.zip"
 
 echo "==> Building $APP_NAME $VERSION"
 rm -rf "$BUILD_DIR"
@@ -73,38 +84,24 @@ fi
 rm -rf "$BUILD_DIR/icon"
 
 # --- Sign and verify -----------------------------------------------------------
-echo "==> Ad-hoc signing"
-codesign --force --deep --sign - "$APP"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  echo "==> Ad-hoc signing"
+  codesign --force --deep --sign - "$APP"
+else
+  # Inside out: the only nested code is the main executable. No entitlements
+  # are needed: Accessibility, CGEvent posting and SMAppService all work under
+  # the hardened runtime.
+  echo "==> Signing with hardened runtime"
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
+    "$APP/Contents/MacOS/$APP_NAME"
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+fi
 lipo -info "$APP/Contents/MacOS/$APP_NAME"
-codesign -v "$APP"
+codesign --verify --strict --deep --verbose=2 "$APP"
 codesign -dv "$APP" 2>&1 | sed 's/^/    /' || true
 
-# --- ZIP -------------------------------------------------------------------------
-echo "==> Creating $ZIP"
-ditto -c -k --keepParent "$APP" "$ZIP"
-
-# --- DMG -------------------------------------------------------------------------
-echo "==> Creating $DMG"
-STAGING="$BUILD_DIR/dmg"
-rm -rf "$STAGING"
-mkdir -p "$STAGING"
-cp -R "$APP" "$STAGING/"
-ln -s /Applications "$STAGING/Applications"
-
-dmg_ok=0
-for attempt in 1 2 3; do
-  if hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG"; then
-    dmg_ok=1
-    break
-  fi
-  echo "warning: hdiutil failed (attempt $attempt); retrying" >&2
-  sleep 3
-done
-rm -rf "$STAGING"
-if [[ "$dmg_ok" != "1" ]]; then
-  echo "error: could not create the DMG" >&2
-  exit 1
-fi
+# --- ZIP and DMG -----------------------------------------------------------------
+bash "$ROOT/Scripts/package_app.sh" "$VERSION"
 
 echo "==> Done"
 ls -lh "$BUILD_DIR"
